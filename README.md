@@ -63,3 +63,45 @@ The script creates an Intel macOS 12+ app and ZIP in `dist/`. Re-running overwri
 7. Run disk verification only after saving work. Review the actual output; do not infer filesystem health from a PID or exit code alone.
 
 Tests cover analysis of failures/timeouts, firewall states, low storage, unsupported-OS update interpretation, crash signatures, redaction, baseline round trips, export privacy, offline catalog selection and real process failure/timeout capture.
+
+
+## Targeted startup cleanup script
+
+`scripts/Clean-Unused-Startup.command` addresses the nine specific Adobe, Sony,
+Skype and Company Portal startup entries reviewed in the user's reports. It is
+not a general cleaner or a complete vendor uninstaller.
+
+Download `TuneUp-startup-cleanup.zip` from the repository root, extract it, then
+right-click `Clean-Unused-Startup.command` → Open. It previews the exact files and
+requires typing `CLEAN` before requesting administrator authorization. Run it as
+your normal account, not with sudo. If macOS refuses to open a downloaded script,
+review it and run it from Terminal with `bash` followed by its quoted file path;
+do not disable Gatekeeper globally.
+
+- Missing files are harmless. Related installed apps cause that vendor to be
+  skipped. Company Portal is skipped unless enrollment is confirmed absent.
+- Only explicitly listed startup plists are moved. Documents, application support
+  files, helper binaries, other vendors and historical crash reports stay intact.
+- Loaded services in the current GUI session or system domain are unloaded first.
+  A service that remains loaded is left in place and reported as failed. Other
+  logged-in users must sign out or restart to unload their own sessions.
+- Files are archived with original ownership under the root-owned, mode-700
+  `/Library/Application Support/TuneUp/StartupBackups/` directory. The script
+  prints a backup ID. Nothing is permanently deleted.
+- Restore from the same account using `bash /path/to/Clean-Unused-Startup.command
+  --restore BACKUP_ID` (one line). Restore asks for `RESTORE`, refuses overwrites,
+  and does not load services or change pre-existing service-disable flags.
+- Restart and run TuneUp again afterward. The cleanup script doesn't certify the
+  absence of malware or a complete removal of all vendor files.
+
+For a noninteractive preview (no changes or admin access):
+
+```bash
+bash scripts/Clean-Unused-Startup.command --preview
+```
+
+The five fixture tests (`python3 scripts/test-startup-cleanup.py`) exercise preview,
+cancellation, unload/archive/restore, idempotence, failed unloading, related-app and
+enrollment guards, symlinks, unexpected labels and path traversal. They use a fake
+Mac filesystem and simulated tools; real launchctl and authorization still need
+validation on macOS.

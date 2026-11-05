@@ -11,6 +11,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - name: Targeted cleanup script tests
+        run: |
+          bash -n scripts/Clean-Unused-Startup.command
+          python3 scripts/test-startup-cleanup.py
       - name: Unit and process-runner tests
         run: swift test --arch x86_64
       - name: Build Monterey-compatible Intel application

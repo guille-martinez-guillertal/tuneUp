@@ -16,3 +16,11 @@ Not run here:
 - Actual macOS command probes, administrator authorization, UI launch, Gatekeeper behavior, or Monterey runtime compatibility.
 
 The repository includes 12 XCTest cases. Their presence is not a passing test result. The GitHub macOS workflow must succeed before downloading a build, followed by the actual-Mac checklist in README.md. The ZIP accompanying this source is a source archive, not a compiled app.
+
+## Targeted startup cleanup
+
+The cleanup script passed `bash -n` and all five fixture tests on Linux. Tests
+redirect all paths and privileged/macOS tools into an isolated temporary tree.
+Real macOS launchctl and sudo execution were not run here. The user's uploaded
+reports demonstrate that the native app has been run on their Mac; this does not
+validate the new cleanup script.
