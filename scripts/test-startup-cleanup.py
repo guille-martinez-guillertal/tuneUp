@@ -32,7 +32,7 @@ class CleanupTests(unittest.TestCase):
         self.stub('profiles', 'echo "Enrolled via DEP: No"; echo "MDM enrollment: No"')
         self.stub('stat', 'case "$2" in "%u") echo 0;; "%Lp") echo 700;; "%u:%Lp") echo 0:700;; esac')
         self.stub('install', 'for destination in "${@: -1}"; do mkdir -p "$destination"; chmod 700 "$destination"; done\n# Multi-directory install invocation\nfor destination in "$@"; do if [[ "$destination" == /* ]]; then mkdir -p "$destination"; chmod 700 "$destination"; fi; done')
-        self.stub('PlistBuddy', 'exec python3 -c \'import plistlib,sys; print(plistlib.load(open(sys.argv[-1], "rb"))["Label"])\' "$@"')
+        self.stub('PlistBuddy', 'exec python3 -c \'import plistlib,sys; p=plistlib.load(open(sys.argv[-1], "rb")); key=sys.argv[2].split(":")[1]; print(p[key])\' "$@"')
         self.stub('launchctl', '''if [[ "$1" == print ]]; then
   grep -Fxq "$2" "$FIXTURE_LOADED"; exit $?
 fi
@@ -117,7 +117,7 @@ fi''')
         (self.root / 'Applications/PMHMac.app').mkdir()
         portal = self.agent('system', 'com.microsoft.entraidentitybrokerxpc')
         self.stub('profiles', 'echo "MDM enrollment: Yes"')
-        mismatch = self.agent('user', 'com.adobe.AAM.Updater-1.0', label='unexpected.service')
+        mismatch = self.agent('user', 'com.adobe.AAM.Updater-1.0', label='com.adobe.unexpected-service')
         skype = self.home / 'Library/LaunchAgents/com.skype.skype.shareagent.plist'
         skype.symlink_to(mismatch)
         result = self.run_script('--apply')
@@ -127,10 +127,27 @@ fi''')
         self.assertIn('unexpected or unreadable', result.stdout)
         self.assertIn('SKIP (symlink)', result.stdout)
 
+
+    def test_reviewed_vendor_alias_requires_exact_executable(self):
+        portal = self.agent('system', 'com.microsoft.entraidentitybrokerxpc', label='UBF8T346G9.com.microsoft.entrabroker.EntraIdentityBrokerXPC.Mach')
+        portal.write_bytes(plistlib.dumps({
+            'Label': 'UBF8T346G9.com.microsoft.entrabroker.EntraIdentityBrokerXPC.Mach',
+            'Program': str(self.root) + '/Applications/Company Portal.app/Contents/XPCServices/Microsoft Single Sign on for Mac.xpc/Contents/MacOS/Microsoft Single Sign on for Mac'
+        }))
+        adobe = self.agent('user', 'com.adobe.AAM.Updater-1.0', label='com.adobe.AAM.Updater-alias')
+        adobe.write_bytes(plistlib.dumps({
+            'Label': 'com.adobe.AAM.Updater-alias',
+            'Program': str(self.root) + '/Library/Application Support/Adobe/OOBE/PDApp/UWA/UpdaterStartupUtility'
+        }))
+        result = self.run_script('--apply')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertFalse(portal.exists()); self.assertFalse(adobe.exists())
+        self.assertTrue(list(self.home.glob('TuneUp-startup-cleanup-*')))
+
     def test_restore_rejects_path_traversal(self):
         result = self.run_script('--restore', '../../elsewhere', answer='RESTORE\n')
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn('exact backup ID', result.stderr)
+        self.assertIn('exact backup ID', result.stdout + result.stderr)
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

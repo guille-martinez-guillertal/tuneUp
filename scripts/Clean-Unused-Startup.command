@@ -21,6 +21,14 @@ case "$mode" in
   *) echo 'Usage: Clean-Unused-Startup.command [--preview | --apply | --restore BACKUP_ID]'; exit 1 ;;
 esac
 
+# Preview remains read-only. Apply/restore save output to a private log.
+if [[ "$mode" != --preview ]]; then
+  umask 077
+  cleanup_log="$(/usr/bin/mktemp "$HOME/TuneUp-startup-cleanup-XXXXXX")" || exit 1
+  exec > >(/usr/bin/tee -a "$cleanup_log") 2>&1
+  echo "Cleanup log: $cleanup_log"
+fi
+
 user_uid="$(/usr/bin/id -u)"
 archive_root='/Library/Application Support/TuneUp/StartupBackups'
 # Index, relative archive path, original path. Paths are fixed, not read from reports.
@@ -51,16 +59,16 @@ original=(
 check_archive_parents() {
   local directory
   for directory in '/Library/Application Support/TuneUp' "$archive_root"; do
-    if [[ -L "$directory" ]]; then
+    if /usr/bin/sudo /bin/test -L "$directory"; then
       echo "Refusing symlink: $directory" >&2; return 1
     fi
-    if [[ -e "$directory" ]]; then
-      if [[ ! -d "$directory" ]] || [[ "$(/usr/bin/stat -f '%u' "$directory")" != 0 ]]; then
+    if /usr/bin/sudo /bin/test -e "$directory"; then
+      if ! /usr/bin/sudo /bin/test -d "$directory" || [[ "$(/usr/bin/sudo /usr/bin/stat -f '%u' "$directory")" != 0 ]]; then
         echo "Expected a root-owned directory: $directory" >&2; return 1
       fi
       # Refuse group/other writable parents, even if root-owned.
       local permissions
-      permissions="$(/usr/bin/stat -f '%Lp' "$directory")"
+      permissions="$(/usr/bin/sudo /usr/bin/stat -f '%Lp' "$directory")"
       if (( (8#$permissions & 0022) != 0 )); then
         echo "Refusing writable archive parent: $directory" >&2; return 1
       fi
@@ -73,8 +81,8 @@ if [[ "$mode" == --restore ]]; then
   if [[ ! "$backup_id" =~ ^[0-9]{8}-[0-9]{6}-[A-Za-z0-9]{6}$ ]]; then
     echo 'Provide the exact backup ID printed by cleanup.' >&2; exit 1
   fi
-  check_archive_parents || exit 1
   /usr/bin/sudo -v || exit 1
+  check_archive_parents || exit 1
   archive="$archive_root/$backup_id"
   if ! /usr/bin/sudo /bin/test -d "$archive" || /usr/bin/sudo /bin/test -L "$archive"; then
     echo 'Backup not found or is a symlink.' >&2; exit 1
@@ -168,8 +176,8 @@ echo 'System-wide entries affect all accounts on this Mac.'
 echo 'No application data, documents, helper binaries, or historical crash reports are deleted.'
 read -r -p 'Type CLEAN to unload and archive the listed files: ' answer
 [[ "$answer" == CLEAN ]] || { echo 'Canceled. Nothing changed.'; exit 0; }
-check_archive_parents || exit 1
 /usr/bin/sudo -v || exit 1
+check_archive_parents || exit 1
 /usr/bin/sudo /usr/bin/install -d -o root -g wheel -m 700 "$archive_root" || exit 1
 archive="$(/usr/bin/sudo /usr/bin/mktemp -d "$archive_root/$(/bin/date +%Y%m%d-%H%M%S)-XXXXXX")" || exit 1
 /usr/bin/sudo /usr/bin/install -d -o root -g wheel -m 700 "$archive/user-agents" "$archive/system-agents" "$archive/system-daemons" || exit 1
@@ -184,9 +192,29 @@ for i in "${selected[@]}"; do
     echo "SKIP (state changed): $path"; failed=1; continue
   fi
   label="$(/usr/libexec/PlistBuddy -c 'Print :Label' "$path" 2>/dev/null)"
-  # Refuse unexpected service identities instead of unloading arbitrary labels.
-  if [[ "$label.plist" != "$(/usr/bin/basename "$path")" ]]; then
-    echo "SKIP (unexpected or unreadable service Label): $path"; failed=1; continue
+  # Labels need not match filenames. For the reviewed Adobe/Portal aliases,
+  # require both the exact expected executable and a vendor-scoped label.
+  valid_label=false
+  if [[ -n "$label" && "$label.plist" == "$(/usr/bin/basename "$path")" ]]; then
+    valid_label=true
+  elif [[ -n "$label" ]]; then
+    program="$(/usr/libexec/PlistBuddy -c 'Print :Program' "$path" 2>/dev/null)"
+    if [[ -z "$program" ]]; then
+      program="$(/usr/libexec/PlistBuddy -c 'Print :ProgramArguments:0' "$path" 2>/dev/null)"
+    fi
+    case "$path" in
+      *com.adobe.AAM.Updater-1.0.plist)
+        [[ "$label" == com.adobe.* && "$program" == '/Library/Application Support/Adobe/OOBE/PDApp/UWA/UpdaterStartupUtility' ]] && valid_label=true ;;
+      *com.microsoft.entraidentitybrokerxpc.plist)
+        if [[ "$program" == '/Applications/Company Portal.app/Contents/XPCServices/Microsoft Single Sign on for Mac.xpc/Contents/MacOS/Microsoft Single Sign on for Mac' ]]; then
+          case "$label" in
+            com.microsoft.*|UBF8T346G9.com.microsoft.entrabroker.EntraIdentityBrokerXPC.Mach) valid_label=true ;;
+          esac
+        fi ;;
+    esac
+  fi
+  if [[ "$valid_label" != true || "$label" == */* ]]; then
+    echo "SKIP (unexpected or unreadable service Label: $label): $path"; failed=1; continue
   fi
   domain="gui/$user_uid"
   if [[ "${relative[$i]}" == system-daemons/* ]]; then

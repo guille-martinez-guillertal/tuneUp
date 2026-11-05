@@ -19,7 +19,7 @@ The repository includes 12 XCTest cases. Their presence is not a passing test re
 
 ## Targeted startup cleanup
 
-The cleanup script passed `bash -n` and all five fixture tests on Linux. Tests
+The cleanup script passed `bash -n` and all six fixture tests on Linux. Tests
 redirect all paths and privileged/macOS tools into an isolated temporary tree.
 Real macOS launchctl and sudo execution were not run here. The user's uploaded
 reports demonstrate that the native app has been run on their Mac; this does not

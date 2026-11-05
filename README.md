@@ -100,8 +100,10 @@ For a noninteractive preview (no changes or admin access):
 bash scripts/Clean-Unused-Startup.command --preview
 ```
 
-The five fixture tests (`python3 scripts/test-startup-cleanup.py`) exercise preview,
+The six fixture tests (`python3 scripts/test-startup-cleanup.py`) exercise preview,
 cancellation, unload/archive/restore, idempotence, failed unloading, related-app and
-enrollment guards, symlinks, unexpected labels and path traversal. They use a fake
+enrollment guards, symlinks, unexpected labels, verified vendor label aliases and path traversal. They use a fake
 Mac filesystem and simulated tools; real launchctl and authorization still need
 validation on macOS.
+
+Cleanup updates save a private `TuneUp-startup-cleanup-*` log in your home folder for apply/restore (preview stays read-only). If any item is skipped, share that log rather than repeatedly rebooting. Legitimate vendor labels that differ from filenames are accepted only for the reviewed Adobe/Company Portal executable paths and vendor-scoped labels.
