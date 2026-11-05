@@ -12,7 +12,7 @@ Completed here:
 Not run here:
 
 - Swift compiler type checking, linking, XCTest suite (no Swift/macOS SDK installed).
-- GitHub Actions workflow (source has not been pushed).
+- GitHub Actions result: source was pushed to `main`, triggering the configured workflow if Actions is enabled. Build status/log access is blocked here: `api.github.com` returns a proxy CONNECT 403; the unauthenticated web view returns 404. No passing build or downloadable app is claimed.
 - Actual macOS command probes, administrator authorization, UI launch, Gatekeeper behavior, or Monterey runtime compatibility.
 
 The repository includes 12 XCTest cases. Their presence is not a passing test result. The GitHub macOS workflow must succeed before downloading a build, followed by the actual-Mac checklist in README.md. The ZIP accompanying this source is a source archive, not a compiled app.
