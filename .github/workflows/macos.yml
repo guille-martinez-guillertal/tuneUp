@@ -1,0 +1,24 @@
+name: Build and test Mac app
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  macos:
+    runs-on: macos-15-intel
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit and process-runner tests
+        run: swift test --arch x86_64
+      - name: Build Monterey-compatible Intel application
+        run: ./scripts/build-app.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TuneUp-Monterey-Intel
+          path: |
+            dist/TuneUp-Monterey-Intel.zip
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
